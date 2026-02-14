@@ -1,0 +1,112 @@
+@import "tailwindcss";
+
+/* =========================================
+   KASCROW THEME CONFIGURATION
+   Hackathon-Grade, Production-Ready Visual Identity
+   ========================================= */
+
+@theme {
+  /* Main Background */
+  --color-bg-base: #0b0f14;
+
+  /* Primary Brand Color - Electric Cyan */
+  --color-primary: #22d3ee;
+
+  /* Secondary Brand Color - Cyber Purple */
+  --color-secondary: #7c7cff;
+
+  /* Success Color - Growth Green */
+  --color-success: #2effa3;
+
+  /* Functional Colors */
+  --color-warning: #fbbf24;
+  --color-danger: #f87171;
+
+  --color-muted: #d1d5dc;
+
+  --color-card: #111827;
+}
+
+html {
+  background: #0b0f14;
+  color: white;
+  font-family:
+    "Lucida Sans", "Lucida Sans Regular", "Lucida Grande",
+    "Lucida Sans Unicode", Geneva, Verdana, sans-serif;
+}
+
+@keyframes flow {
+  0% {
+    transform: translateX(0);
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+.animate-flow {
+  animation: flow 2s infinite linear;
+}
+
+@keyframes dash {
+  to {
+    stroke-dashoffset: -1000;
+  }
+}
+.animate-dash {
+  stroke-dasharray: 10 10;
+  animation: dash 20s linear infinite;
+}
+
+@keyframes flow-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+.animate-flow-shimmer {
+  animation: flow-shimmer 1.5s infinite;
+}
+
+.primary-gradient {
+  background: linear-gradient(to right, #22d3ee, #7c7cff);
+}
+
+@keyframes glow-flicker {
+  0%,
+  18%,
+  22%,
+  25%,
+  54%,
+  56%,
+  100% {
+    text-shadow: 0 0 10px rgba(34, 211, 238, 0.5);
+  }
+  20%,
+  24%,
+  55% {
+    text-shadow: 0 0 15px rgba(34, 211, 238, 0.8);
+  }
+}
+
+.animate-glow-flicker {
+  animation: glow-flicker 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.active-nav {
+  box-shadow: 0 0 10px rgba(34, 211, 238, 0.1);
+  background: #161e2e;
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
+}
+
+.active-nav svg {
+  color: var(--color-primary);
+}

@@ -1,0 +1,392 @@
+import crypto from "crypto";
+import EscrowStore from "../escrow.store.js";
+import { Escrow, IEscrowUTXO, type IEscrow } from "../model/Escrow.js";
+import {
+  PrivateKey,
+  createTransaction,
+  kaspaToSompi,
+  signTransaction,
+  sompiToKaspaString,
+} from "@kluster/kaspa-wasm-node";
+import { kaspaRpcService } from "../../services/kaspaRpcService.js";
+import TR_STATUS from "../../config/TR_STATUSES.js";
+import { encrypt, decrypt } from "../escrow.utils.js";
+import { escrowFeeBuffer } from "../../utils/bufferCalculator.js";
+import { NotFoundError } from "../../errors/auth.erros.js";
+import { canTransitionEscrow } from "../machine/escrow.fsm.js";
+import { User } from "../../auth/User.model.js";
+import { checkExpiry } from "../../utils/checkExpiry.js";
+import {
+  maxAgeMsForEscrowsNotAcked,
+  maxAgeMsForUnfundedEscrows,
+} from "../../config/options.js";
+
+export class EscrowService {
+  constructor(private escrowStore: EscrowStore) {}
+
+  async createEscrow(
+    amount: number,
+    buyerAddress: string,
+    vendorAddress: string,
+  ): Promise<IEscrow> {
+    const ESCROW_FEE_BUFFER_KAS = escrowFeeBuffer; // small buffer for fees in KAS
+    const totalAmountKAS = amount + ESCROW_FEE_BUFFER_KAS;
+
+    const NETWORK = process.env.KASPA_NETWORK || "testnet-10";
+
+    const escrowId = crypto.randomUUID();
+
+    // 1️⃣ Generate 32-byte random private key (hex)
+    const privateKeyHex = crypto.randomBytes(32).toString("hex");
+
+    // 2️⃣ Create Kaspa private key
+    const privateKey = new PrivateKey(privateKeyHex);
+
+    // 3️⃣ Derive escrow address
+    const escrowAddress = privateKey.toAddress(NETWORK).toString();
+
+    const encryptedPrivateKey = await encrypt(privateKeyHex);
+
+    const expiresAt = Date.now() + maxAgeMsForUnfundedEscrows;
+
+    const escrow = await this.escrowStore.create({
+      escrowId,
+      buyerAddress,
+      vendorAddress,
+      escrowAddress,
+      amount,
+      expectedAmount: totalAmountKAS, // KAS
+      encryptedPrivateKey,
+      status: TR_STATUS.CREATED,
+      expiresAt,
+    });
+
+    return escrow;
+  }
+
+  // vendor acknowledges
+
+  async vendorAcksEscrow(escrowId: string, senderAddress: string) {
+    const escrow = await this.getEscrowById(escrowId);
+    if (!escrow) throw new NotFoundError("Escrow not found");
+
+    const sender = await User.findOne({ walletAddress: senderAddress });
+    if (!sender)
+      throw new NotFoundError("Address is not linked to any account");
+    const actor = senderAddress === escrow.vendorAddress ? "vendor" : "buyer";
+
+    canTransitionEscrow(escrow, TR_STATUS.VENDOR_ACKNOWLEDGES, actor);
+
+    escrow.status = TR_STATUS.VENDOR_ACKNOWLEDGES;
+    escrow.vendorAcknowledgedAt = new Date();
+
+    await escrow.save();
+  }
+
+  private getRefundableAmount(escrow: IEscrow): bigint {
+    return escrow.utxos
+      .filter((u) => !u.refunded)
+      .reduce((sum, u) => sum + BigInt(u.amount), 0n);
+  }
+
+  private async refundBuyer(escrow: IEscrow) {
+    canTransitionEscrow(escrow, TR_STATUS.REFUNDED, "system");
+    // idempotency guard
+    if (escrow.refundedAt) return;
+
+    const refundable = this.getRefundableAmount(escrow);
+    if (refundable === 0n) return;
+
+    const rpc = kaspaRpcService.getRpcClient();
+
+    const decryptedPrivateKey = await decrypt(escrow.encryptedPrivateKey);
+    const NETWORK = process.env.KASPA_NETWORK || "testnet-10";
+    const privateKey = new PrivateKey(decryptedPrivateKey);
+
+    const fromAddress = privateKey.toAddress(NETWORK).toString();
+    const utxoResponse = await rpc.getUtxosByAddresses([fromAddress]);
+    const utxos = utxoResponse.entries || [];
+
+    if (utxos.length === 0) {
+      throw new Error("Escrow balance unavailable");
+    }
+
+    const priorityFee = 2_000n;
+
+    const totalInput = utxos.reduce(
+      (sum, utxo) => sum + BigInt(utxo.amount),
+      0n,
+    );
+
+    if (totalInput < refundable) {
+      throw new Error("Escrow balance insufficient for refund");
+    }
+
+    const finalRefundableAmount =
+      refundable > priorityFee ? refundable - priorityFee : 0n;
+
+    if (finalRefundableAmount <= 0n) {
+      throw new Error("Escrow balance too low after fee");
+    }
+
+    const tx = createTransaction(
+      utxos,
+      [
+        {
+          address: escrow.buyerAddress,
+          amount: finalRefundableAmount,
+        },
+      ],
+      priorityFee,
+    );
+
+    signTransaction(tx, [privateKey], true);
+    tx.finalize();
+
+    // 🚀 SUBMIT
+    const submitResult = await rpc.submitTransaction({
+      transaction: tx,
+    });
+
+    // ✅ persist refund state
+    for (const utxo of escrow.utxos) {
+      if (utxo.refunded) continue;
+      utxo.refunded = true;
+      utxo.refundTxId = submitResult.transactionId;
+      utxo.refundedAt = new Date();
+    }
+    escrow.status = TR_STATUS.REFUNDED;
+    escrow.refundTxId = submitResult.transactionId;
+    escrow.refundedAt = new Date();
+    await escrow.save();
+  }
+
+  async applyFundingUpdate(escrow: IEscrow, utxos: IEscrowUTXO[]) {
+    // Compute funded amount
+    const balance = utxos.reduce((a, u) => a + BigInt(u.amount), 0n);
+    const requiredSompi = kaspaToSompi(escrow.expectedAmount.toString()) ?? 0n;
+
+    // Update escrow UTXOs in DB
+    const existingTxIds = new Set(
+      escrow.utxos.map((u) => u.txId + ":" + u.index),
+    );
+    const newUTXOs = utxos.filter(
+      (u) => !existingTxIds.has(u.txId + ":" + u.index),
+    );
+    escrow.utxos = [...escrow.utxos, ...newUTXOs];
+
+    // Store funding transaction IDs
+    if (!escrow.fundingTxIds) escrow.fundingTxIds = [];
+    for (const utxo of newUTXOs) {
+      if (!escrow.fundingTxIds.includes(utxo.txId)) {
+        escrow.fundingTxIds.push(utxo.txId);
+      }
+    }
+
+    escrow.fundedAmount = Number(sompiToKaspaString(balance));
+
+    // Decide next state
+    if (balance < requiredSompi) {
+      // partially funded
+      canTransitionEscrow(escrow, TR_STATUS.PARTIALLY_FUNDED, "system");
+      escrow.status = TR_STATUS.PARTIALLY_FUNDED;
+      escrow.partiallyFundedAt = new Date();
+    } else {
+      // fully funded
+      canTransitionEscrow(escrow, TR_STATUS.FUNDED, "system");
+      escrow.status = TR_STATUS.FUNDED;
+      escrow.fundedAt = new Date();
+    }
+
+    await escrow.save();
+    // emit event via websockets
+  }
+
+  // refunding partially funded escrows that are expired
+  async handlePartialRefundAndExpiry(escrow: IEscrow) {
+    canTransitionEscrow(escrow, TR_STATUS.EXPIRED, "system");
+
+    await this.refundBuyer(escrow);
+    escrow.status = TR_STATUS.EXPIRED;
+    escrow.expiredAt = new Date();
+
+    await escrow.save();
+  }
+
+  async handlePossibleExpiry(escrow: IEscrow) {
+    const now = Date.now();
+    const age = now - escrow.createdAt.getTime();
+
+    const isExpired = checkExpiry(escrow.expiresAt, age);
+
+    if (!isExpired) return;
+
+    switch (escrow.status) {
+      case TR_STATUS.CREATED:
+      case TR_STATUS.AWAITING_PAYMENT: {
+        canTransitionEscrow(escrow, TR_STATUS.EXPIRED, "system");
+
+        escrow.status = TR_STATUS.EXPIRED;
+        escrow.expiredAt = new Date(now);
+        break;
+      }
+
+      case TR_STATUS.PARTIALLY_FUNDED: {
+        await this.handlePartialRefundAndExpiry(escrow);
+        break;
+      }
+    }
+
+    await escrow.save();
+  }
+
+  getTotalAmountSompi(escrow: IEscrow): bigint {
+    return kaspaToSompi(escrow.expectedAmount.toString()) ?? 0n;
+  }
+
+  async getEscrowByAddress(escrowAddress: string): Promise<IEscrow | null> {
+    return this.escrowStore.getByAddress(escrowAddress);
+  }
+
+  async getEscrowById(escrowId: string): Promise<IEscrow | null> {
+    return this.escrowStore.getById(escrowId);
+  }
+
+  async getPendingEscrows() {
+    return this.escrowStore.getPendingEscrows();
+  }
+
+  async releaseEscrowFunds(escrowId: string) {
+    const escrow = await this.escrowStore.getById(escrowId);
+    if (!escrow) {
+      throw new Error("Escrow not found");
+    }
+
+    if (escrow.status === TR_STATUS.RELEASED) {
+      throw new Error("Escrow already released");
+    }
+
+    canTransitionEscrow(escrow, TR_STATUS.RELEASED, "system");
+
+    if (
+      escrow.status !== TR_STATUS.FUNDED &&
+      escrow.status === TR_STATUS.PARTIALLY_FUNDED
+    ) {
+      throw new Error("Escrow not funded or partially funded");
+    }
+
+    const rpc = kaspaRpcService.getRpcClient();
+
+    // load escrow private key
+    const decryptedPrivateKey = await decrypt(escrow.encryptedPrivateKey);
+
+    if (!decryptedPrivateKey) {
+      throw new Error("Failed to decrypt escrow private key");
+    }
+    const privateKey = new PrivateKey(decryptedPrivateKey);
+    const NETWORK = process.env.KASPA_NETWORK || "testnet-10";
+
+    const fromAddress = privateKey.toAddress(NETWORK).toString();
+
+    // fetch UTXOs
+    const utxoResponse = await rpc.getUtxosByAddresses([fromAddress]);
+    const utxos = utxoResponse.entries || [];
+
+    if (utxos.length === 0) {
+      throw new Error("Escrow balance unavailable or already spent");
+    }
+
+    const totalInput = utxos.reduce(
+      (sum, utxo) => sum + BigInt(utxo.amount),
+      0n,
+    );
+    if (
+      totalInput < BigInt(kaspaToSompi(escrow.expectedAmount.toString()) ?? 0n)
+    ) {
+      throw new Error("Escrow underfunded");
+    }
+
+    const priorityFee = 2_000n;
+
+    const sendAmount = escrow.amount;
+
+    const sendAmountSompi = kaspaToSompi(sendAmount.toString()) ?? 0n;
+    if (totalInput < sendAmountSompi + priorityFee) {
+      throw new Error("Escrow underfunded for release + fee");
+    }
+    const tx = await createTransaction(
+      utxos,
+      [
+        {
+          address: escrow.vendorAddress,
+          amount: sendAmountSompi,
+        },
+      ],
+      priorityFee,
+    );
+
+    // sign transaction
+    signTransaction(tx, [privateKey], true);
+
+    // Finalize
+    tx.finalize();
+
+    //🚀 SUBMIT TO NETWORK
+    const submitResult = await rpc.submitTransaction({
+      transaction: tx,
+    });
+
+    escrow.status = TR_STATUS.RELEASED;
+    escrow.releaseTxId = submitResult.transactionId;
+    await escrow.save();
+
+    return submitResult.transactionId;
+  }
+}
+
+
+
+test for expiry 
+f871f407-e3d7-45fc-aa43-5c34d36bfbff
+
+
+
+
+
+ <form className="border-b border-muted/20 pb-10 flex flex-col gap-5">
+      <div>
+        <label htmlFor="title">Deal Title</label>
+        <input
+          type="text"
+          id="title"
+          name="title"
+          value={formData.title}
+          onChange={handleChange}
+          placeholder="e.g. Selling level 80 Account"
+        />
+      </div>
+
+      <div>
+        <label htmlFor="amount">Amount (KAS)</label>
+        <input
+          type="number"
+          id="amount"
+          name="amount"
+          value={formData.amount}
+          onChange={handleChange}
+          placeholder="0.00"
+        />
+      </div>
+
+      <div>
+        <label htmlFor="vendor">Counterparty Address</label>
+        <input
+          type="text"
+          id="vendor"
+          name="vendor"
+          value={formData.vendor}
+          onChange={handleChange}
+          placeholder="kaspa:q..."
+        />
+      </div>
+    </form>

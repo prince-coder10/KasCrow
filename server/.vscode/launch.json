@@ -1,0 +1,8 @@
+{
+  "type": "node",
+  "request": "launch",
+  "name": "Debug Backend (dist)",
+  "program": "${workspaceFolder}/dist/index.js",
+  "console": "integratedTerminal",
+  "skipFiles": ["<node_internals>/**"]
+}

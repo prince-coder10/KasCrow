@@ -1,0 +1,71 @@
+/* shimmer loading effect */
+.shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.shimmer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -150%;
+  height: 100%;
+  width: 250%;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.06) 40%,
+    rgba(255, 255, 255, 0.12) 50%,
+    rgba(255, 255, 255, 0.06) 60%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  transform: translateX(0);
+  animation: shimmer 1.6s linear infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.grid {
+  transition: grid-template-columns 300ms ease;
+}
+
+.mobile-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.checked-after {
+  position: relative;
+}
+
+.checked-after::after {
+  content: "";
+  position: absolute;
+  left: 15px;
+  bottom: -25px;
+  width: 2px;
+  height: 30px;
+  background-color: var(--color-muted);
+  opacity: 0.3;
+}
+
+@keyframes fundProgress {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+.funding-bar {
+  animation-name: fundProgress;
+  /* animation-duration: 1s; */
+  animation-iteration-count: 1;
+  animation-timing-function: ease-out;
+  animation-fill-mode: forwards;
+}

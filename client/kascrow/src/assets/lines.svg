@@ -1,0 +1,4 @@
+<svg class="w-full h-full" preserveAspectRatio="none">
+<path d="M0,100 C300,150 500,50 800,100 S1200,150 1400,100" fill="none" stroke="#22D3EE" stroke-width="1" class="animate-dash"></path>
+<path d="M0,300 C200,250 600,350 1000,250 S1400,350 1600,250" fill="none" stroke="#7C7CFF" stroke-width="1" class="animate-dash" style="animation-duration: 7s;"></path>
+</svg>
