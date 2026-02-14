@@ -20,7 +20,6 @@ function Escrow() {
     address: string;
     balance: string;
   } | null>(null);
-  const [loadingBalance, setLoadingBalance] = useState(true);
   const { wallet, connect } = useWallet();
   const queryClient = useQueryClient();
 

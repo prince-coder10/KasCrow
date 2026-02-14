@@ -1,4 +1,3 @@
-import React from "react";
 import Button from "./Button";
 
 interface InfoBoxProps {
@@ -11,7 +10,7 @@ function InfoBox({ message, onClick }: InfoBoxProps) {
     <div className="flex justify-center items-center">
       <p>{message}</p>
       <div>
-        <Button>Close</Button>
+        <Button onClick={onClick}>Close</Button>
       </div>
     </div>
   );
