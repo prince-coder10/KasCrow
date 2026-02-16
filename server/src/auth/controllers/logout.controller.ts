@@ -9,26 +9,12 @@ const cookieName = process.env.COOKIE_NAME!;
 
 export const logoutUser = async (req: AuthRequest, res: Response) => {
   try {
-    const user = req.user;
-
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: "Unauthorized to perform this action",
-      });
-    }
-
     const userId = req.user?.id;
 
-    if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message: "User ID not found",
-      });
+    if (userId) {
+      // Increment token version to invalidate all existing JWTs
+      await User.invalidateUserSession(userId);
     }
-
-    // Increment token version to invalidate all existing JWTs
-    await User.invalidateUserSession(userId);
 
     // Clear the session cookie
     res.clearCookie(cookieName, {

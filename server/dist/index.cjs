@@ -1625,16 +1625,8 @@ const User = new UserService(new UserStore());
 const cookieName = process.env.COOKIE_NAME;
 const logoutUser = async (req, res) => {
 	try {
-		if (!req.user) return res.status(401).json({
-			success: false,
-			message: "Unauthorized to perform this action"
-		});
 		const userId = req.user?.id;
-		if (!userId) return res.status(401).json({
-			success: false,
-			message: "User ID not found"
-		});
-		await User.invalidateUserSession(userId);
+		if (userId) await User.invalidateUserSession(userId);
 		res.clearCookie(cookieName, {
 			httpOnly: true,
 			secure: process.env.NODE_ENV === "production",
