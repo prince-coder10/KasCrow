@@ -12,12 +12,35 @@ import Settlements from "./pages/app/Settlements";
 import CreateSettlement from "./pages/app/CreateSettlement";
 import ViewSettlement from "./pages/app/ViewSettlement";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Toaster } from "react-hot-toast";
 
 const queryClient = new QueryClient();
 
 function App() {
   return (
     <SidebarProvider>
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          style: {
+            background: "#111827",
+            color: "#fff",
+            border: "1px solid #374151",
+          },
+          success: {
+            iconTheme: {
+              primary: "#2effa3",
+              secondary: "#111827",
+            },
+          },
+          error: {
+            iconTheme: {
+              primary: "#f87171",
+              secondary: "#111827",
+            },
+          },
+        }}
+      />
       <QueryClientProvider client={queryClient}>
         <Routes>
           <Route element={<HeroLayout />}>

@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { api } from "../../apis/axios";
 import useSidebar from "../../hooks/useSidebarContext";
 import { useQueryClient } from "@tanstack/react-query";
+import toast from "react-hot-toast";
 
 import {
   Copy,
@@ -47,6 +48,12 @@ function ViewSettlement() {
         const response = await api.post(`/escrow/${id}/allow`);
         // Refresh settlements list as status might have changed (e.g. from unacked to acked/viewed)
         await queryClient.invalidateQueries({ queryKey: ["settlements"] });
+
+        // Notify other tabs/windows that this escrow has been viewed/updated
+        const channel = new BroadcastChannel("escrow_updates");
+        channel.postMessage({ type: "SETTLEMENT_VIEWED", escrowId: id });
+        channel.close();
+
         console.log("Settlement Data:", response.data.settlement);
         setSettlement(response.data.settlement);
         // setTimeLeft(Number(response.data.settlement.file.expiresIn));
@@ -93,7 +100,7 @@ function ViewSettlement() {
         window.open(signedUrl, "_blank", "noopener,noreferrer");
       } catch (e) {
         console.error("Download failed", e);
-        alert("Failed to download file");
+        toast.error("Failed to download file", { id: "download-error" });
       }
     }
   };

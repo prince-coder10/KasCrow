@@ -114,7 +114,7 @@ function MyEscrows() {
     >
       <div className="w-full mt-5 flex flex-col gap-2">
         <div className="flex items-center justify-between">
-          <p className="text-[24px] font-semibold">Recent Escrows</p>
+          <p className="text-[24px] font-semibold">All Escrows</p>
         </div>
 
         <EscrowList />

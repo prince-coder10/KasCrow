@@ -10,6 +10,7 @@ import { useEscrow } from "./resources/MyEscrows.resource";
 import { useWallet } from "../../hooks/useWalletContext";
 import { api } from "../../apis/axios";
 import { useQueryClient } from "@tanstack/react-query";
+import toast from "react-hot-toast";
 
 function Escrow() {
   const { id } = useParams<{ id: string }>();
@@ -34,14 +35,14 @@ function Escrow() {
       }
 
       if (!escrow?.escrowAddress) {
-        alert("Invalid escrow address");
+        toast.error("Invalid escrow address", { id: "address-error" });
         return;
       }
 
       const kaskeeper = (window as any).Kaskeeper;
 
       if (!kaskeeper) {
-        alert("KasKeeper not installed");
+        toast.error("KasKeeper not installed", { id: "wallet-error" });
         return;
       }
 
@@ -75,11 +76,13 @@ function Escrow() {
       console.error("Funding failed:", err);
       // Handle user rejection specifically if possible
       if (err.message && err.message.includes("rejected")) {
-        alert("Transaction rejected by user");
+        toast.error("Transaction rejected by user", { id: "tx-rejected" });
       } else {
-        alert(`Transaction failed: ${err.message || "Unknown error"}`);
+        toast.error(`Transaction failed: ${err.message || "Unknown error"}`, {
+          id: "tx-failed",
+        });
       }
-      // ONLY reset if failed
+    } finally {
       setIsFunding(false);
     }
   };
@@ -89,10 +92,12 @@ function Escrow() {
     try {
       await api.post(`/escrow/${escrow.escrowId}/release`);
       await queryClient.invalidateQueries({ queryKey: ["myEscrows"] });
-      alert("Funds released successfully");
+      toast.success("Funds released successfully", { id: "release-success" });
     } catch (err: any) {
       console.error("Release failed:", err);
-      alert(`Release failed: ${err.message || "Unknown error"}`);
+      toast.error(`Release failed: ${err.message || "Unknown error"}`, {
+        id: "release-failed",
+      });
     }
   };
 
@@ -125,6 +130,24 @@ function Escrow() {
     };
   }, [escrow?.escrowAddress]);
 
+  useEffect(() => {
+    if (!escrow?.escrowId) return;
+
+    const channel = new BroadcastChannel("escrow_updates");
+    channel.onmessage = (event) => {
+      if (
+        event.data.type === "SETTLEMENT_VIEWED" &&
+        event.data.escrowId === escrow.escrowId
+      ) {
+        queryClient.invalidateQueries({ queryKey: ["myEscrows"] });
+      }
+    };
+
+    return () => {
+      channel.close();
+    };
+  }, [escrow?.escrowId, queryClient]);
+
   const roundBalance = (balance: string): string => {
     if (!balance) return "0.00";
 
@@ -143,12 +166,11 @@ function Escrow() {
 
   const viewSettlement = async () => {
     if (!escrow) return;
-    await queryClient.invalidateQueries({ queryKey: ["myEscrows"] });
-
     const url = `/escrow/settlement/${escrow.escrowId}/view`;
     const features =
       "width=400,height=600,resizable=yes,scrollbars=yes,status=no,location=no";
     window.open(url, "SettlementView", features);
+    await queryClient.invalidateQueries({ queryKey: ["myEscrows"] });
   };
 
   if (isLoading) {

@@ -22,7 +22,7 @@ app.set("json replacer", (_key: string, value: any) => {
 
 app.use(
   cors({
-    origin: ["https://playerflip.com", "http://localhost:5173"],
+    origin: ["https://kascrow.vercel.app", "http://localhost:5173"],
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
   }),

@@ -2,9 +2,8 @@
 import axios from "axios";
 
 export const api = axios.create({
-  baseURL: "http://localhost:3000/api/v1",
+  baseURL: "https://api-kascrow.onrender.com/api/v1", //http://localhost:3000/api/v1
   withCredentials: true,
-  timeout: 600000,
 });
 
 // Optional: response interceptor for logging (add tomorrow)

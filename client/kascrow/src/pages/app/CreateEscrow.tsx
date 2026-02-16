@@ -9,6 +9,7 @@ import { useState } from "react";
 import StepItem from "../../components/StepItem";
 import { api } from "../../apis/axios";
 import { useQueryClient } from "@tanstack/react-query";
+import toast from "react-hot-toast";
 
 type EscrowFormData = {
   title: string;
@@ -29,17 +30,19 @@ function CreateEscrow() {
 
   const validateStepOne = () => {
     if (!formData.amount || isNaN(Number(formData.amount))) {
-      alert("Invalid amount");
+      toast.error("Invalid amount", { id: "validation-error" });
       return false;
     }
 
     if (!formData.title.trim() || formData.title.length < 3) {
-      alert("Title must be at least 3 characters");
+      toast.error("Title must be at least 3 characters", {
+        id: "validation-error",
+      });
       return false;
     }
 
     if (!formData.vendor.trim()) {
-      alert("Vendor address required");
+      toast.error("Vendor address required", { id: "validation-error" });
       return false;
     }
 
@@ -90,7 +93,7 @@ function CreateEscrow() {
       console.log(res);
     } catch (error) {
       console.error("Error creating escrow:", error);
-      alert("Failed to create escrow");
+      toast.error("Failed to create escrow", { id: "create-error" });
     }
   };
 
