@@ -12,7 +12,7 @@ class KaspaSocket {
   >();
   private balanceListeners = new Map<string, Set<BalanceCallback>>();
 
-  connect(url: string = "ws://localhost:3000") {
+  connect(url: string = "wss://api-kascrow.onrender.com") {
     if (
       this.socket &&
       (this.socket.readyState === WebSocket.CONNECTING ||
