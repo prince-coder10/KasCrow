@@ -20,10 +20,7 @@ app.set("json replacer", (_key: string, value: any) => {
   return value;
 });
 
-const allowedOrigins = [
-  "https://api-kascrow.onrender.com",
-  "http://localhost:5173",
-];
+const allowedOrigins = ["https://kascrow.vercel.app", "http://localhost:5173"];
 
 app.use(
   cors({

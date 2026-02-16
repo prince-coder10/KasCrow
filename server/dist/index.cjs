@@ -1683,7 +1683,7 @@ app.set("json replacer", (_key, value) => {
 	if (typeof value === "bigint") return value.toString();
 	return value;
 });
-const allowedOrigins = ["https://api-kascrow.onrender.com", "http://localhost:5173"];
+const allowedOrigins = ["https://kascrow.vercel.app", "http://localhost:5173"];
 app.use((0, cors.default)({
 	origin: (origin, callback) => {
 		if (!origin || allowedOrigins.includes(origin)) callback(null, true);
