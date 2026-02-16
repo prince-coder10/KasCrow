@@ -51,6 +51,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     await logout();
     await disconnectKasKeeper();
     setWallet(initialWallet);
+    window.location.reload();
     console.log(wallet);
   };
 

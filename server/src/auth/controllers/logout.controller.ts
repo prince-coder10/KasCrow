@@ -1,19 +1,23 @@
 import { UserService } from "../../auth/auth.service.js";
 import { UserStore } from "../../auth/auth.store.js";
-import type { Response } from "express";
+import type { Response, Request } from "express";
 import { catchError } from "../../utils/catchError.js";
-import type { AuthRequest } from "../../middleware/requireAuth.js";
+import { verifySessionToken } from "../../utils/jwt.js";
 
 const User = new UserService(new UserStore());
 const cookieName = process.env.COOKIE_NAME!;
 
-export const logoutUser = async (req: AuthRequest, res: Response) => {
+export const logoutUser = async (req: Request, res: Response) => {
   try {
-    const userId = req.user?.id;
+    const token = req.cookies[cookieName];
 
-    if (userId) {
-      // Increment token version to invalidate all existing JWTs
-      await User.invalidateUserSession(userId);
+    if (token) {
+      const payload = verifySessionToken(token);
+      const user = await User.getUserById(payload.sub);
+      if (user) {
+        // Increment token version to invalidate all existing JWTs
+        await User.invalidateUserSession(user?._id.toString());
+      }
     }
 
     // Clear the session cookie

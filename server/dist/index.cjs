@@ -1625,8 +1625,12 @@ const User = new UserService(new UserStore());
 const cookieName = process.env.COOKIE_NAME;
 const logoutUser = async (req, res) => {
 	try {
-		const userId = req.user?.id;
-		if (userId) await User.invalidateUserSession(userId);
+		const token = req.cookies[cookieName];
+		if (token) {
+			const payload = verifySessionToken(token);
+			const user = await User.getUserById(payload.sub);
+			if (user) await User.invalidateUserSession(user?._id.toString());
+		}
 		res.clearCookie(cookieName, {
 			httpOnly: true,
 			secure: process.env.NODE_ENV === "production",
@@ -1672,7 +1676,7 @@ const getProfile = async (req, res) => {
 //#region src/routes/auth.routes.ts
 const authRoute = (0, express.Router)();
 authRoute.post("/wallet", loginUser);
-authRoute.post("/logout", requireAuth, logoutUser);
+authRoute.post("/logout", logoutUser);
 authRoute.get("/profile", requireAuth, getProfile);
 var auth_routes_default = authRoute;
 

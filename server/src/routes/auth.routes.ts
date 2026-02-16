@@ -7,7 +7,7 @@ import { getProfile } from "../auth/controllers/profile.controller.js";
 const authRoute: Router = Router();
 
 authRoute.post("/wallet", loginUser);
-authRoute.post("/logout", requireAuth, logoutUser);
+authRoute.post("/logout", logoutUser);
 authRoute.get("/profile", requireAuth, getProfile);
 
 export default authRoute;
