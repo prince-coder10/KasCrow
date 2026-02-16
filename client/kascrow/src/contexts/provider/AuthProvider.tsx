@@ -41,6 +41,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         walletAddress,
       });
 
+      console.log("login response", res);
+
       setUser({
         walletAddress: res.data.data.wallet,
         userId: res.data.data.id,
