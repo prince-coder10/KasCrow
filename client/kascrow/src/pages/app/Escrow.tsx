@@ -104,7 +104,7 @@ function Escrow() {
   useEffect(() => {
     if (!escrow?.escrowAddress) return;
 
-    kaspaSocket.connect("ws://localhost:3000");
+    kaspaSocket.connect();
     const escrowAddress = escrow.escrowAddress;
 
     const unwatch = kaspaSocket.watchAddress(escrowAddress, (data) => {
