@@ -1683,14 +1683,12 @@ app.set("json replacer", (_key, value) => {
 	if (typeof value === "bigint") return value.toString();
 	return value;
 });
+const allowedOrigins = ["https://api-kascrow.onrender.com", "http://localhost:5173"];
 app.use((0, cors.default)({
-	origin: ["https://kascrow.vercel.app", "http://localhost:5173"],
-	methods: [
-		"GET",
-		"POST",
-		"PUT",
-		"DELETE"
-	],
+	origin: (origin, callback) => {
+		if (!origin || allowedOrigins.includes(origin)) callback(null, true);
+		else callback(/* @__PURE__ */ new Error("Not allowed by CORS"));
+	},
 	credentials: true
 }));
 app.use(express.default.urlencoded({ extended: false }));

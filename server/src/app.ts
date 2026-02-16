@@ -20,10 +20,20 @@ app.set("json replacer", (_key: string, value: any) => {
   return value;
 });
 
+const allowedOrigins = [
+  "https://api-kascrow.onrender.com",
+  "http://localhost:5173",
+];
+
 app.use(
   cors({
-    origin: ["https://kascrow.vercel.app", "http://localhost:5173"],
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     credentials: true,
   }),
 );
